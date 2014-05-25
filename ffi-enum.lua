@@ -33,6 +33,8 @@ The code above is compiled to
 The compiler treats the fields as constants, which enables 
 optimizations not possible with Lua table fields.
 
+Please note that these are not seen as enums on the C side.
+
 -- ]=]  ------   --   --   --   ------  ]=]--
 
 
