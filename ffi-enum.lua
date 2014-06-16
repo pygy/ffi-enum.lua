@@ -42,28 +42,26 @@ local t_concat = require"table".concat
 local new = require"ffi".new
 local cache = setmetatable({}, {__mode = "v"})
 
+local inline_comment = "^%s*//[^\n]*\n()"
+local multi_line_comment = "^%s*/%*.-*/%s*()"
+local enumpat = "^(%s*([%w_][%a_]*)%s*(=?)%s*([x%x]*)%s*())"
+
 local function enum(defs)
   local cached = cache[defs]
   if cached then return cached end
 
-  local inline_comment = "^%s*//[^\n]*\n()"
-  local multi_line_comment = "^%s*/%*.-*/%s*()"
-  local definition = "^(%s*([%w_][%a_]*)%s*(=?)%s*([x%x]*)%s*())"
 
   local N = 0
   local pos = 1
   local len = #defs
   local res = {}
-  local count = 0
   local coma = false
 
   while true do
-    count = count + 1 if count > 20 then error"COUNT" end
     if pos == len + 1 then break end
     if pos > len + 1 then error("LARGER: "..pos.." "..len) end
 
-    local p = defs:match(inline_comment, pos)
-    p = p  or defs:match(multi_line_comment, pos)
+    local p = defs:match(inline_comment, pos) or defs:match(multi_line_comment, pos)
 
     if not p then
       if coma then
@@ -72,8 +70,8 @@ local function enum(defs)
         coma = false
       else
         local chunk, name, eq, value
-        chunk, name, eq, value, p = defs:match(definition, pos)
-        if not p then error "malformed enum definition" end
+        chunk, name, eq, value, p = defs:match(enumpat, pos)
+        if not p then error("malformed enum definition") end
 
         if value ~= "" then
           assert(value:find"^%-?%d+$" or value:find"0x%x+", "badly formed number "..value.." in enum")
@@ -100,33 +98,80 @@ local function enum(defs)
   return res
 end
 
+local definepat = "^(#define[ \t]+([%w_][%a_]*)[ \t]+([x%x]+)[ \t]*(\n?)())"
 
--- do -- tests
---   local e
---   e = enum[[foo, bar, baz]]
---   assert(e.foo == 0, e.bar == 1, e.baz == 2)
+local function define(defs)
+  local cached = cache[defs]
+  if cached then return cached end
 
---   e = enum[[
---     foo, bar, 
---     baz = 5, qux, 
---     quux = 0xFe
---   ]]
---   assert(e.foo == 0, e.bar == 1, e.baz == 5, e.qux == 6, e.quux == 254)
+  local pos = defs:match("^%s*\n()") or 1
+  local len = #defs
+  local res = {}
 
---   e = enum[[
---     // Blah
---     foo, /* TRAP! */bar, /**/ //
---     baz = 6, qux, 
---     quux = 0xFe
---     /* end */
---   ]]
---   assert(e.foo == 0, e.bar == 1, e.baz == 6, e.qux == 7, e.quux == 254)
+  while true do
+    if pos == len + 1 then break end
+    if pos > len + 1 then error("LARGER: "..pos.." "..len) end
 
---   print"ok"
--- end
+    local chunk, name, value, lf, p = defs:match(definepat, pos)
+    p = p or defs:match(inline_comment, pos) or defs:match(multi_line_comment, pos)
+    if chunk then
+      if lf ~= "\n" and p ~= len + 1 then
+        error("end of line expected after: "..chunk)
+      end
+      assert(value:find"^%-?%d+$" or value:find"0x%x+", "badly formed number "..value.." in enum")
+
+      res[#res+1] = "  static const int "..name.." = "..value..";"
+    elseif not p then
+      p = defs:match("^[ \t]+()", pos)
+      assert(p, "malformed #define")
+    end -- if chunk
+    pos = p
+  end -- while true
+  res = new("struct{ \n"..t_concat(res, "\n").."\n}")
+  cache[defs] = res
+  return res
+end
+
+ -- tests
+pcall(function() if arg[0]:find"ffi%-enum.lua$" then
+  xpcall(function()
+    local e
+    e = enum[[foo, bar, baz]]
+    assert(e.foo == 0, e.bar == 1, e.baz == 2)
+
+    e = enum[[
+      foo, bar, 
+      baz = 5, qux, 
+      quux = 0xFe
+    ]]
+    assert(e.foo == 0, e.bar == 1, e.baz == 5, e.qux == 6, e.quux == 254)
+
+    e = enum[[
+      // Blah
+      foo, /* TRAP! */bar, /**/ //
+      baz = 6, qux, 
+      quux = 0xFe
+      /* end */
+    ]]
+    assert(e.foo == 0, e.bar == 1, e.baz == 6, e.qux == 7, e.quux == 254)
+
+    e = define[[
+      // hello
+      #define foo 0 
+      #define bar 1
+        /* gfdfg */
+      #define baz 5
+      #define qux 6
+      #define quux 0xFe
+    ]]
+    assert(e.foo == 0, e.bar == 1, e.baz == 5, e.qux == 6, e.quux == 254)
+
+    print"ok"
+   end, function(e) print(e) os.exit(1) end)
+end end)
 
 
-return enum
+return {enum = enum, define = define}
 
 --[[
 
