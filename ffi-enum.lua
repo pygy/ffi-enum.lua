@@ -43,6 +43,9 @@ local new = require"ffi".new
 local cache = setmetatable({}, {__mode = "v"})
 
 local function enum(defs)
+  local cached = cache[defs]
+  if cached then return cached end
+
   local inline_comment = "^%s*//[^\n]*\n()"
   local multi_line_comment = "^%s*/%*.-*/%s*()"
   local definition = "^(%s*([%w_][%a_]*)%s*(=?)%s*([x%x]*)%s*())"
@@ -73,7 +76,7 @@ local function enum(defs)
         if not p then error "malformed enum definition" end
 
         if value ~= "" then
-          assert(value:find"^%-?%d+$" or value:find"0x%x+", "badly formed number "..value)
+          assert(value:find"^%-?%d+$" or value:find"0x%x+", "badly formed number "..value.." in enum")
           N = tonumber(value)
         end
 
@@ -93,6 +96,7 @@ local function enum(defs)
   end -- while true
 
   res = new("struct{ \n"..t_concat(res, "\n").."\n}")
+  cache[defs] = res
   return res
 end
 
