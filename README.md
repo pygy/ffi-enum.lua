@@ -3,9 +3,9 @@
 Syntactic sugar for enum-like FFI structs. MIT Licensed.
 
 ```Lua
-enum = require"ffi-enum"
+fe = require"ffi-enum"
 
-e = enum[[
+e = fe.enum[[
   FOO, BAR, /* comments are */
   BAZ = 7,  // parsed properly 
   QUX,
@@ -15,9 +15,23 @@ e = enum[[
 assert(e.FOO == 0 and e.BAR == 1
    and e.BAZ == 7 and e.QUX == 8
    and e.QUUX == 12)
+
+-- note that leading spaces are allowed for indenting.
+
+d = fe.define[[
+  #define foo 0 
+  #define bar 1
+  #define baz 5
+  #define qux 6
+  #define quux 0xFe
+]]
+
+assert(d.FOO == 0 and d.BAR == 1
+   and d.BAZ == 7 and d.QUX == 8
+   and d.QUUX == 12)
 ```
 
-The code above is compiled to
+In both cases, the code is compiled to
 
 ```Lua
 ffi.new[[
