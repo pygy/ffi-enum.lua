@@ -18,16 +18,30 @@ Released under the MIT License
        and e.BAZ == 7 and e.QUX == 8
        and e.QUUX == 254)
 
-The code above is compiled to
+    -- note that leading spaces are allowed for indenting.
+
+    d = fe.define[[
+      #define foo 0 
+      #define bar 1
+      #define baz 5
+      #define qux 6
+      #define quux 0xFe
+    ]]
+
+    assert(d.FOO == 0 and d.BAR == 1
+       and d.BAZ == 7 and d.QUX == 8
+       and d.QUUX == 12)
+
+In both cases, the code is compiled to
 
     ffi.new[[
-    struct{
-      static const int FOO = 0;
-      static const int BAR = 1;
-      static const int BAZ = 7;
-      static const int QUX = 8;
-      static const int QUUX = 12;
-    }
+      struct{
+        static const int FOO = 0;
+        static const int BAR = 1;
+        static const int BAZ = 7;
+        static const int QUX = 8;
+        static const int QUUX = 12;
+      }
     ]]
 
 The compiler treats the fields as constants, which enables 
